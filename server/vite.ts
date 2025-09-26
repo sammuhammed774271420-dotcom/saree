@@ -1,5 +1,6 @@
 // server/vite.ts
 import * as vite from "vite";
+
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
@@ -27,6 +28,7 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true,
   };
 
+  // إنشاء Vite server
   const viteServer = await vite.createServer({
     ...viteConfig,
     configFile: path.resolve(__dirname, "..", "client", "vite.config.ts"),

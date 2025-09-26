@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { Upload, Image as ImageIcon, Loader as Loader2, X } from 'lucide-react';
 
 interface ImageUploadProps {
   label: string;

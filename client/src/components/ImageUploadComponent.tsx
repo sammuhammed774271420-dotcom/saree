@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Loader2, X, Eye, Download, Trash2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Loader as Loader2, X, Eye, Download, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface ImageUploadComponentProps {

@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { MenuItem, Restaurant } from '@shared/schema';
-import ImageUploadComponent from '@/components/ImageUploadComponent';
+import ImageUpload from '@/components/ImageUpload';
 
 export default function AdminMenuItems() {
   const { toast } = useToast();
@@ -403,7 +403,7 @@ export default function AdminMenuItems() {
                 </div>
 
                 <div>
-                  <ImageUploadComponent
+                  <ImageUpload
                     label="صورة الوجبة *"
                     value={formData.image}
                     onChange={(url) => setFormData(prev => ({ ...prev, image: url }))}
@@ -411,7 +411,6 @@ export default function AdminMenuItems() {
                     placeholder="رابط الصورة أو ارفع صورة من جهازك"
                     required={true}
                     data-testid="input-menu-item-image"
-                    showPreview={true}
                   />
                 </div>
 

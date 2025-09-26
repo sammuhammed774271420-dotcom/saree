@@ -10,7 +10,7 @@ import { Loader2, Shield, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const [, setLocation] = useLocation();
-  const { login, user, loading, isAuthenticated } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''

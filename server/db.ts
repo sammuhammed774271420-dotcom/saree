@@ -772,7 +772,11 @@ async getNotifications(recipientType?: string, recipientId?: string, unread?: bo
     return newTracking;
   }
 
- 
+  async getOrderTracking(orderId: string): Promise<any[]> {
+    return await this.db.select().from(orderTracking)
+      .where(eq(orderTracking.orderId, orderId))
+      .orderBy(desc(orderTracking.createdAt));
+  }
 
   // Cart Functions - وظائف السلة
   async getCartItems(userId: string): Promise<any[]> {

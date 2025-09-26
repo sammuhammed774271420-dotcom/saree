@@ -59,10 +59,15 @@ export default function ImageUpload({
       const formData = new FormData();
       formData.append('image', file);
       formData.append('category', category);
+      formData.append('optimize', 'true');
       
       const response = await fetch('/api/images/upload', {
         method: 'POST',
         body: formData,
+        headers: {
+          // لا تضع Content-Type header عند استخدام FormData
+          // المتصفح سيضعه تلقائياً مع boundary
+        }
       });
       
       if (!response.ok) {
@@ -71,12 +76,17 @@ export default function ImageUpload({
       }
       
       const result = await response.json();
-      onChange(result.data.url);
       
-      toast({
-        title: "تم رفع الصورة بنجاح",
-        description: "تم حفظ الصورة في Supabase بنجاح",
-      });
+      if (result.success && result.data?.url) {
+        onChange(result.data.url);
+        
+        toast({
+          title: "تم رفع الصورة بنجاح",
+          description: `تم حفظ الصورة (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
+        });
+      } else {
+        throw new Error(result.message || 'فشل في رفع الصورة');
+      }
     } catch (error) {
       console.error('خطأ في رفع الصورة:', error);
       toast({

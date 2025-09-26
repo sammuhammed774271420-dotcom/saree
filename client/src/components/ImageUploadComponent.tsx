@@ -153,6 +153,7 @@ export default function ImageUploadComponent({
           formData.append('images', file);
         });
         formData.append('category', category);
+        formData.append('optimize', 'true');
         
         const response = await fetch('/api/images/upload-multiple', {
           method: 'POST',
@@ -165,6 +166,11 @@ export default function ImageUploadComponent({
         }
         
         const result = await response.json();
+        
+        if (!result.success || !result.data) {
+          throw new Error(result.message || 'فشل في رفع الصور');
+        }
+        
         uploadedFiles = result.data;
         setUploadedImages(prev => [...prev, ...uploadedFiles]);
         
@@ -177,6 +183,7 @@ export default function ImageUploadComponent({
         const formData = new FormData();
         formData.append('image', files[0]);
         formData.append('category', category);
+        formData.append('optimize', 'true');
         
         const response = await fetch('/api/images/upload', {
           method: 'POST',
@@ -189,6 +196,11 @@ export default function ImageUploadComponent({
         }
         
         const result = await response.json();
+        
+        if (!result.success || !result.data) {
+          throw new Error(result.message || 'فشل في رفع الصورة');
+        }
+        
         const uploadedFile = result.data;
         uploadedFiles = [uploadedFile];
         setUploadedImages([uploadedFile]);
@@ -199,7 +211,7 @@ export default function ImageUploadComponent({
       
       toast({
         title: "تم رفع الصورة بنجاح",
-        description: `تم رفع ${uploadedFiles.length} صورة إلى Supabase بنجاح`,
+        description: `تم رفع ${uploadedFiles.length} صورة بنجاح (${(files[0].size / 1024 / 1024).toFixed(2)} MB)`,
       });
 
     } catch (error) {

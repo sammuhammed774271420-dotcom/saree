@@ -5,7 +5,6 @@ import fs from "fs";
 import path from "path";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
-import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,49 +22,73 @@ export function log(message: string, source = "express") {
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: { 
+      server,
+      port: 5000 // تأكد من تطابق المنفذ
+    },
     allowedHosts: true,
+    host: "0.0.0.0",
+    port: 5000,
   };
 
-  // إنشاء Vite server
-  const viteServer = await vite.createServer({
-    ...viteConfig,
-    configFile: path.resolve(__dirname, "..", "vite.config.ts"), // تغيير المسار
-    server: serverOptions,
-    appType: "custom",
-    root: path.resolve(__dirname, ".."), // تغيير المسار إلى المجلد الرئيسي
-  });
+  try {
+    // إنشاء Vite server
+    const viteServer = await vite.createServer({
+      ...viteConfig,
+      configFile: false, // استخدام التكوين الممر مباشرة
+      server: serverOptions,
+      appType: "custom",
+      root: path.resolve(__dirname, "..", "client"),
+    });
 
-  app.use(viteServer.middlewares);
-  
-  app.use("*", async (req: any, res: any, next: any) => {
-    const url = req.originalUrl;
-    try {
-      const clientTemplate = path.resolve(
-        __dirname,
-        "..",
-        "index.html" // تغيير المسار
-      );
+    // إضافة middleware لتحديد أنواع MIME الصحيحة
+    app.use((req, res, next) => {
+      if (req.url?.endsWith('.ts') || req.url?.endsWith('.tsx')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      }
+      next();
+    });
+
+    app.use(viteServer.middlewares);
+    
+    app.use("*", async (req: any, res: any, next: any) => {
+      const url = req.originalUrl;
       
-      let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      
-      // استخدام query parameter بدلاً من nanoid للتحكم بال cache
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?t=${Date.now()}"`
-      );
-      
-      const page = await viteServer.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
-    } catch (e) {
-      viteServer.ssrFixStacktrace(e as Error);
-      next(e);
-    }
-  });
+      // تجاهل طلبات الـ assets و API
+      if (url.startsWith('/src/') || url.startsWith('/@id/') || url.startsWith('/@vite/') || url.startsWith('/api/')) {
+        return next();
+      }
+
+      try {
+        const clientTemplate = path.resolve(
+          __dirname,
+          "..",
+          "client",
+          "index.html"
+        );
+        
+        let template = await fs.promises.readFile(clientTemplate, "utf-8");
+        
+        const page = await viteServer.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      } catch (e) {
+        if (viteServer.ssrFixStacktrace) {
+          viteServer.ssrFixStacktrace(e as Error);
+        }
+        next(e);
+      }
+    });
+
+    log("Vite server configured successfully", "vite");
+    
+  } catch (error) {
+    console.error("Error setting up Vite:", error);
+    throw error;
+  }
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "../dist"); // تغيير المسار إلى dist
+  const distPath = path.resolve(__dirname, "..", "dist", "public");
   if (!fs.existsSync(distPath)) {
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`,

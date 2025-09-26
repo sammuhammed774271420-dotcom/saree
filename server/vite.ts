@@ -1,6 +1,5 @@
 // server/vite.ts
 import * as vite from "vite";
-
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
@@ -31,27 +30,31 @@ export async function setupVite(app: Express, server: Server) {
   // إنشاء Vite server
   const viteServer = await vite.createServer({
     ...viteConfig,
-    configFile: path.resolve(__dirname, "..", "client", "vite.config.ts"),
+    configFile: path.resolve(__dirname, "..", "vite.config.ts"), // تغيير المسار
     server: serverOptions,
     appType: "custom",
-    root: path.resolve(__dirname, "..", "client"),
+    root: path.resolve(__dirname, ".."), // تغيير المسار إلى المجلد الرئيسي
   });
 
   app.use(viteServer.middlewares);
+  
   app.use("*", async (req: any, res: any, next: any) => {
     const url = req.originalUrl;
     try {
       const clientTemplate = path.resolve(
         __dirname,
         "..",
-        "client",
-        "index.html",
+        "index.html" // تغيير المسار
       );
+      
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      
+      // استخدام query parameter بدلاً من nanoid للتحكم بال cache
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
+        `src="/src/main.tsx?t=${Date.now()}"`
       );
+      
       const page = await viteServer.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
@@ -62,7 +65,7 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
+  const distPath = path.resolve(__dirname, "../dist"); // تغيير المسار إلى dist
   if (!fs.existsSync(distPath)) {
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`,

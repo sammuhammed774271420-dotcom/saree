@@ -147,8 +147,25 @@ export default function ImageUploadComponent({
       let uploadedFiles: UploadedImage[];
 
       if (allowMultiple && files.length > 1) {
-        // رفع ملفات متعددة
-        uploadedFiles = await uploadMultipleFiles(files);
+        // رفع ملفات متعددة عبر API
+        const formData = new FormData();
+        Array.from(files).forEach(file => {
+          formData.append('images', file);
+        });
+        formData.append('category', category);
+        
+        const response = await fetch('/api/images/upload-multiple', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'فشل في رفع الصور');
+        }
+        
+        const result = await response.json();
+        uploadedFiles = result.data;
         setUploadedImages(prev => [...prev, ...uploadedFiles]);
         
         // تحديث القيمة بأول صورة أو دمج الروابط
@@ -156,8 +173,23 @@ export default function ImageUploadComponent({
           onChange(uploadedFiles[0].url);
         }
       } else {
-        // رفع ملف واحد
-        const uploadedFile = await uploadSingleFile(files[0]);
+        // رفع ملف واحد عبر API
+        const formData = new FormData();
+        formData.append('image', files[0]);
+        formData.append('category', category);
+        
+        const response = await fetch('/api/images/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'فشل في رفع الصورة');
+        }
+        
+        const result = await response.json();
+        const uploadedFile = result.data;
         uploadedFiles = [uploadedFile];
         setUploadedImages([uploadedFile]);
         onChange(uploadedFile.url);
@@ -167,7 +199,7 @@ export default function ImageUploadComponent({
       
       toast({
         title: "تم رفع الصورة بنجاح",
-        description: `تم رفع ${uploadedFiles.length} صورة إلى الخادم`,
+        description: `تم رفع ${uploadedFiles.length} صورة إلى Supabase بنجاح`,
       });
 
     } catch (error) {
@@ -212,7 +244,7 @@ export default function ImageUploadComponent({
         
         toast({
           title: "تم حذف الصورة",
-          description: "تم حذف الصورة من الخادم",
+          description: "تم حذف الصورة من Supabase",
         });
       }
     } catch (error) {

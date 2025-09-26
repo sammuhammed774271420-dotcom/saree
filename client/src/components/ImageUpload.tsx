@@ -4,13 +4,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Image as ImageIcon, Loader2, X } from 'lucide-react';
-import { uploadImage } from '@/lib/supabase';
 
 interface ImageUploadProps {
   label: string;
   value: string;
   onChange: (url: string) => void;
-  bucket?: string;
+  category?: string;
   placeholder?: string;
   required?: boolean;
   'data-testid'?: string;
@@ -20,7 +19,7 @@ export default function ImageUpload({
   label,
   value,
   onChange,
-  bucket = 'images',
+  category = 'general',
   placeholder = 'https://example.com/image.jpg',
   required = false,
   'data-testid': testId
@@ -56,11 +55,27 @@ export default function ImageUpload({
     setIsUploading(true);
 
     try {
-      const result = await uploadImage(file, bucket);
-      onChange(result.url);
+      // رفع الصورة عبر API الخادم
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('category', category);
+      
+      const response = await fetch('/api/images/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'فشل في رفع الصورة');
+      }
+      
+      const result = await response.json();
+      onChange(result.data.url);
+      
       toast({
         title: "تم رفع الصورة بنجاح",
-        description: "تم حفظ الصورة في التخزين السحابي",
+        description: "تم حفظ الصورة في Supabase بنجاح",
       });
     } catch (error) {
       console.error('خطأ في رفع الصورة:', error);

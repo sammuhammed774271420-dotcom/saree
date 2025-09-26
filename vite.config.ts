@@ -36,10 +36,14 @@ export default defineConfig(async () => {
       },
     },
     root: path.resolve(__dirname, "client"),
+    publicDir: path.resolve(__dirname, "client", "public"),
     build: {
       outDir: path.resolve(__dirname, "dist/public"),
       emptyOutDir: true,
       rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, "client", "index.html"),
+        },
         output: {
           manualChunks(id: string) {
             if (id.includes('node_modules')) {
@@ -60,6 +64,14 @@ export default defineConfig(async () => {
       fs: {
         strict: false,
       },
+    },
+    // إضافة هذا الخيار الهام
+    appType: 'spa',
+    // تأكد من أن Vite يعرف كيفية معالجة TypeScript
+    esbuild: {
+      loader: 'tsx',
+      include: /src\/.*\.[tj]sx?$/,
+      exclude: [],
     },
   };
 });

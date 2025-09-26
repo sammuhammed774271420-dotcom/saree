@@ -6,7 +6,8 @@ import {
   deleteImageFromSupabase, 
   extractFilePathFromUrl,
   STORAGE_BUCKETS,
-  ensureBucketsExist
+  ensureBucketsExist,
+  supabaseClient
 } from './supabase';
 
 const router = express.Router();
@@ -41,6 +42,27 @@ function generateUniqueFilename(originalName: string, category: string): string 
 // التأكد من إنشاء buckets عند بدء الخادم
 ensureBucketsExist().catch(console.error);
 
+// دالة التحقق من صحة الصورة
+function validateImageFile(file: Express.Multer.File): string | null {
+  // التحقق من نوع الملف
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowedTypes.includes(file.mimetype)) {
+    return 'نوع الملف غير مدعوم. يرجى رفع صورة بصيغة JPG, PNG, WebP, أو GIF';
+  }
+
+  // التحقق من حجم الملف (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    return 'حجم الملف كبير جداً. الحد الأقصى 5 ميجابايت';
+  }
+
+  // التحقق من اسم الملف
+  if (!file.originalname || file.originalname.length > 255) {
+    return 'اسم الملف غير صحيح';
+  }
+
+  return null;
+}
+
 // رفع صورة واحدة إلى Supabase
 router.post('/upload', upload.single('image'), async (req, res) => {
   try {
@@ -48,6 +70,15 @@ router.post('/upload', upload.single('image'), async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'لم يتم اختيار ملف'
+      });
+    }
+
+    // التحقق من صحة الملف
+    const validationError = validateImageFile(req.file);
+    if (validationError) {
+      return res.status(400).json({
+        success: false,
+        message: validationError
       });
     }
 
@@ -64,6 +95,13 @@ router.post('/upload', upload.single('image'), async (req, res) => {
 
     // إنشاء اسم ملف فريد
     const fileName = generateUniqueFilename(req.file.originalname, category);
+
+    // التأكد من وجود bucket
+    const { data: buckets, error: listError } = await supabaseClient.storage.listBuckets();
+    if (listError || !buckets?.some(bucket => bucket.name === bucketName)) {
+      console.log(`📦 إنشاء bucket مفقود: ${bucketName}`);
+      await ensureBucketsExist();
+    }
 
     // رفع الصورة إلى Supabase
     const uploadResult = await uploadImageToSupabase(
@@ -90,7 +128,8 @@ router.post('/upload', upload.single('image'), async (req, res) => {
         originalName: req.file.originalname,
         size: req.file.size,
         category,
-        bucketName
+        bucketName,
+        contentType: req.file.mimetype
       }
     });
 
@@ -115,6 +154,17 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
       });
     }
 
+    // التحقق من صحة جميع الملفات
+    for (const file of files) {
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        return res.status(400).json({
+          success: false,
+          message: `خطأ في الملف ${file.originalname}: ${validationError}`
+        });
+      }
+    }
+
     const { category = 'general' } = req.body;
     
     const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS];
@@ -123,6 +173,13 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
         success: false,
         message: 'فئة غير صحيحة'
       });
+    }
+
+    // التأكد من وجود bucket
+    const { data: buckets, error: listError } = await supabaseClient.storage.listBuckets();
+    if (listError || !buckets?.some(bucket => bucket.name === bucketName)) {
+      console.log(`📦 إنشاء bucket مفقود: ${bucketName}`);
+      await ensureBucketsExist();
     }
 
     const uploadedFiles = [];
@@ -144,7 +201,8 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
           path: uploadResult.path,
           filename: fileName,
           originalName: file.originalname,
-          size: file.size
+          size: file.size,
+          contentType: file.mimetype
         });
       } else {
         failedFiles.push(file.originalname);

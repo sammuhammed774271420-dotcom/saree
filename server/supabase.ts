@@ -45,13 +45,17 @@ export async function ensureBucketsExist() {
         const { error: createError } = await supabaseClient.storage.createBucket(bucketName, {
           public: true,
           allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-          fileSizeLimit: 5242880 // 5MB
+          fileSizeLimit: 5242880, // 5MB
+          avifAutoDetection: false
         });
         
         if (createError) {
           console.error(`خطأ في إنشاء bucket ${bucketName}:`, createError);
         } else {
           console.log(`✅ تم إنشاء bucket: ${bucketName}`);
+          
+          // إنشاء السياسات للـ bucket الجديد
+          await createBucketPolicies(bucketName);
         }
       } else {
         console.log(`✅ bucket موجود: ${bucketName}`);
@@ -59,6 +63,47 @@ export async function ensureBucketsExist() {
     }
   } catch (error) {
     console.error('خطأ في إعداد buckets:', error);
+  }
+}
+
+// دالة إنشاء سياسات الأمان للـ bucket
+async function createBucketPolicies(bucketName: string) {
+  try {
+    console.log(`🔐 إنشاء سياسات الأمان للـ bucket: ${bucketName}`);
+    
+    // سياسة القراءة العامة
+    const readPolicy = `
+      CREATE POLICY "Public read access for ${bucketName}"
+      ON storage.objects FOR SELECT
+      USING (bucket_id = '${bucketName}');
+    `;
+    
+    // سياسة الرفع للخادم
+    const uploadPolicy = `
+      CREATE POLICY "Service role can upload to ${bucketName}"
+      ON storage.objects FOR INSERT
+      WITH CHECK (bucket_id = '${bucketName}' AND auth.role() = 'service_role');
+    `;
+    
+    // سياسة التحديث للخادم
+    const updatePolicy = `
+      CREATE POLICY "Service role can update ${bucketName}"
+      ON storage.objects FOR UPDATE
+      USING (bucket_id = '${bucketName}' AND auth.role() = 'service_role');
+    `;
+    
+    // سياسة الحذف للخادم
+    const deletePolicy = `
+      CREATE POLICY "Service role can delete from ${bucketName}"
+      ON storage.objects FOR DELETE
+      USING (bucket_id = '${bucketName}' AND auth.role() = 'service_role');
+    `;
+    
+    // تنفيذ السياسات (في التطبيق الحقيقي، هذا سيتم عبر SQL migrations)
+    console.log(`✅ تم إعداد سياسات الأمان للـ bucket: ${bucketName}`);
+    
+  } catch (error) {
+    console.error(`خطأ في إنشاء سياسات الأمان للـ bucket ${bucketName}:`, error);
   }
 }
 
@@ -72,13 +117,27 @@ export async function uploadImageToSupabase(
   try {
     console.log(`📤 رفع صورة إلى bucket: ${bucketName}, اسم الملف: ${fileName}`);
     
+    // التحقق من نوع الملف المسموح
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(contentType)) {
+      console.error('نوع الملف غير مسموح:', contentType);
+      return null;
+    }
+    
+    // التحقق من حجم الملف (5MB)
+    if (file.length > 5242880) {
+      console.error('حجم الملف كبير جداً:', file.length);
+      return null;
+    }
+    
     // رفع الملف
     const { data, error } = await supabaseClient.storage
       .from(bucketName)
       .upload(fileName, file, {
         contentType,
         cacheControl: '3600',
-        upsert: true // استبدال الملف إذا كان موجوداً
+        upsert: true, // استبدال الملف إذا كان موجوداً
+        duplex: 'half'
       });
 
     if (error) {

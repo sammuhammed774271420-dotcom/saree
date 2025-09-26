@@ -19,7 +19,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:setup": "ts-node migrations/scripts/setup-database",
-    "db:reset": "drizzle-kit drop && npm run db:setup"
+    "db:reset": "drizzle-kit drop && npm run db:setup",
+    "supabase:policies": "npx supabase db reset --db-url $DATABASE_URL"
   },
   "dependencies": {
         "@supabase/supabase-js": "^2.38.0",

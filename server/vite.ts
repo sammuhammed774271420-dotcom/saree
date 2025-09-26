@@ -45,9 +45,27 @@ export async function setupVite(app: Express, server: Server) {
       server: serverOptions,
       appType: "custom",
       root: path.resolve(__dirname, "..", "client"),
+      define: {
+        global: 'globalThis',
+      },
+      optimizeDeps: {
+        include: ['react', 'react-dom', 'wouter', '@tanstack/react-query'],
+      },
     });
 
     app.use(viteServer.middlewares);
+    
+    // إضافة middleware لتعيين MIME types الصحيحة
+    app.use((req, res, next) => {
+      if (req.url?.endsWith('.js') || req.url?.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (req.url?.endsWith('.ts') || req.url?.endsWith('.tsx')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (req.url?.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
+      next();
+    });
     
     app.use("*", async (req: any, res: any, next: any) => {
       const url = req.originalUrl;
@@ -66,7 +84,10 @@ export async function setupVite(app: Express, server: Server) {
         
         let template = await fs.promises.readFile(clientTemplate, "utf-8");
         const page = await viteServer.transformIndexHtml(url, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(page);
+        res.status(200).set({ 
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-cache"
+        }).end(page);
       } catch (e) {
         if (viteServer.ssrFixStacktrace) {
           viteServer.ssrFixStacktrace(e as Error);
@@ -125,10 +146,23 @@ export function serveStatic(app: Express) {
   }
 
   console.log(`Serving static files from: ${distPath}`);
-  app.use(express.static(distPath));
+  
+  // إضافة middleware لتعيين MIME types الصحيحة للملفات الثابتة
+  app.use(express.static(distPath, {
+    setHeaders: (res, path) => {
+      if (path.endsWith('.js') || path.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      } else if (path.endsWith('.html')) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      }
+    }
+  }));
   
   // خدمة index.html لجميع المسارات الأخرى
   app.use("*", (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

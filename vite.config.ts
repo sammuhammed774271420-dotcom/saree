@@ -26,6 +26,9 @@ export default defineConfig(() => {
 
   return {
     plugins,
+    define: {
+      global: 'globalThis',
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "client", "src"),
@@ -35,14 +38,24 @@ export default defineConfig(() => {
     },
     root: path.resolve(__dirname, "client"),
     publicDir: path.resolve(__dirname, "client", "public"),
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'wouter', '@tanstack/react-query'],
+      exclude: ['@replit/vite-plugin-cartographer', '@replit/vite-plugin-runtime-error-modal']
+    },
     build: {
       outDir: path.resolve(__dirname, "dist/public"),
       emptyOutDir: true,
+      target: 'es2020',
+      minify: 'esbuild',
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "client", "index.html"),
         },
         output: {
+          format: 'es',
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
           manualChunks(id: string) {
             if (id.includes('node_modules')) {
               return id.toString().split('node_modules/')[1].split('/')[0].toString();
@@ -56,20 +69,19 @@ export default defineConfig(() => {
       host: "0.0.0.0",
       port: 5000,
       strictPort: false,
+      cors: true,
       hmr: {
         port: 5000,
+        host: 'localhost'
       },
       fs: {
         strict: false,
+        allow: ['..']
       },
-    },
-    // إضافة هذا الخيار الهام
-    appType: 'spa',
-    // تأكد من أن Vite يعرف كيفية معالجة TypeScript
-    esbuild: {
-      loader: 'tsx',
-      include: /src\/.*\.[tj]sx?$/,
-      exclude: [],
+      headers: {
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Opener-Policy': 'same-origin'
+      }
     },
   };
 });

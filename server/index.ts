@@ -7,6 +7,30 @@ import { storage } from "./storage";
 import { ensureBucketsExist } from "./supabase";
 
 const app = express();
+
+// إعداد MIME types الصحيحة
+app.use((req, res, next) => {
+  // تعيين MIME types الصحيحة للملفات
+  if (req.url?.endsWith('.js') || req.url?.endsWith('.mjs')) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  } else if (req.url?.endsWith('.ts') || req.url?.endsWith('.tsx')) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  } else if (req.url?.endsWith('.css')) {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  } else if (req.url?.endsWith('.html')) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  } else if (req.url?.endsWith('.json')) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+  
+  // إضافة headers الأمان
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

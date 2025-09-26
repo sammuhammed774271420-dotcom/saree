@@ -1,21 +1,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(async () => {
-  const plugins = [
-    react(),
-    runtimeErrorOverlay(),
-  ];
+  const plugins = [react()];
 
-  // Add cartographer plugin only in development on Replit
-  if (process.env.NODE_ENV !== "production" && process.env.REPL_ID) {
-    const { cartographer } = await import("@replit/vite-plugin-cartographer");
-    plugins.push(cartographer());
+  // إضافة plugins الخاصة بـ Replit فقط في بيئة التطوير على Replit
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      // محاولة استيراد plugins الخاصة بـ Replit فقط إذا كانت متوفرة
+      if (process.env.REPL_ID) {
+        const { cartographer } = await import("@replit/vite-plugin-cartographer");
+        plugins.push(cartographer());
+        
+        // إضافة runtime error overlay فقط على Replit
+        const runtimeErrorOverlay = await import("@replit/vite-plugin-runtime-error-modal");
+        plugins.push(runtimeErrorOverlay.default());
+      }
+    } catch (error) {
+      // تجاهل الخطأ إذا لم تكن الحزم متوفرة (في بيئة Production)
+      console.log('Replit plugins not available in production');
+    }
   }
 
   return {
@@ -40,7 +48,7 @@ export default defineConfig(async () => {
           }
         },
       },
-      chunkSizeWarningLimit: 1000,  // Increase limit to reduce unnecessary warnings
+      chunkSizeWarningLimit: 1000,
     },
     server: {
       host: "0.0.0.0",

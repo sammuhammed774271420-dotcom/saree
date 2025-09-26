@@ -8,7 +8,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  },
+  global: {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+});
 
 // أسماء buckets للتخزين
 export const STORAGE_BUCKETS = {
@@ -22,10 +32,28 @@ export const STORAGE_BUCKETS = {
 export interface UploadResult {
   url: string;
   path: string;
+  size?: number;
+  contentType?: string;
 }
 
 export async function uploadImage(file: File, category: string = 'general'): Promise<UploadResult> {
   try {
+    // التحقق من صحة الملف
+    if (!file || !(file instanceof File)) {
+      throw new Error('ملف غير صحيح');
+    }
+
+    // التحقق من نوع الملف
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('نوع الملف غير مدعوم. يرجى اختيار صورة بصيغة JPG, PNG, WebP, أو GIF');
+    }
+
+    // التحقق من حجم الملف (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('حجم الملف كبير جداً. الحد الأقصى 5 ميجابايت');
+    }
+
     // الحصول على اسم bucket المناسب
     const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS] || STORAGE_BUCKETS.general;
     
@@ -40,7 +68,8 @@ export async function uploadImage(file: File, category: string = 'general'): Pro
       .from(bucketName)
       .upload(fileName, file, {
         cacheControl: '3600',
-        upsert: true
+        upsert: true,
+        contentType: file.type
       });
 
     if (error) {
@@ -54,7 +83,9 @@ export async function uploadImage(file: File, category: string = 'general'): Pro
 
     return {
       url: publicUrl,
-      path: data.path
+      path: data.path,
+      size: file.size,
+      contentType: file.type
     };
   } catch (error) {
     console.error('خطأ في رفع الصورة:', error);
@@ -79,5 +110,28 @@ export async function deleteImage(path: string, category: string = 'general'): P
   } catch (error) {
     console.error('خطأ في حذف الصورة:', error);
     return false;
+  }
+}
+
+// دالة التحقق من وجود buckets وإنشاؤها إذا لزم الأمر
+export async function ensureClientBucketsExist() {
+  try {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    
+    if (error) {
+      console.error('خطأ في جلب قائمة buckets:', error);
+      return;
+    }
+
+    for (const [category, bucketName] of Object.entries(STORAGE_BUCKETS)) {
+      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+      
+      if (!bucketExists) {
+        console.log(`📦 bucket غير موجود: ${bucketName}`);
+        // في العميل، لا يمكننا إنشاء buckets - يجب أن يتم ذلك من الخادم
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في التحقق من buckets:', error);
   }
 }

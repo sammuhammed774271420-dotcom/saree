@@ -22,6 +22,7 @@
     "db:reset": "drizzle-kit drop && npm run db:setup"
   },
   "dependencies": {
+        "@supabase/supabase-js": "^2.38.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",

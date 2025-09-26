@@ -30,13 +30,10 @@ export interface AuthResult {
 // خدمة المصادقة المبسطة
 export class SimpleAuthService {
   // البحث عن المدير بالبريد الإلكتروني أو اسم المستخدم
-  async findAdminByIdentifier(identifier: string): Promise<AdminUser | null> {
+  async findAdminByIdentifier(email: string): Promise<AdminUser | null> {
     try {
-      const admins = await storage.getAllAdminUsers();
-      const admin = admins.find(a => 
-        a.email === identifier || 
-        a.username === identifier
-      );
+      // Use the correct method name from storage
+      const admin = await storage.getAdminByEmail(email);
       return admin || null;
     } catch (error) {
       console.error('خطأ في البحث عن المدير:', error);
@@ -47,8 +44,8 @@ export class SimpleAuthService {
   // البحث عن السائق برقم الهاتف
   async findDriverByPhone(phone: string): Promise<Driver | null> {
     try {
-      const drivers = await storage.getAllDrivers();
-      const driver = drivers.find(d => d.phone === phone);
+      const drivers = await storage.getDrivers();
+      const driver = drivers.find((d: Driver) => d.phone === phone);
       return driver || null;
     } catch (error) {
       console.error('خطأ في البحث عن السائق:', error);
@@ -57,12 +54,12 @@ export class SimpleAuthService {
   }
 
   // تسجيل دخول المدير
-  async loginAdmin(identifier: string, password: string): Promise<AuthResult> {
+  async loginAdmin(email: string, password: string): Promise<AuthResult> {
     try {
-      console.log('🔍 محاولة تسجيل دخول مدير:', identifier);
+      console.log('🔍 محاولة تسجيل دخول مدير:', email);
       
       // البحث عن المدير
-      const admin = await this.findAdminByIdentifier(identifier);
+      const admin = await this.findAdminByIdentifier(email);
       if (!admin) {
         return { 
           success: false, 

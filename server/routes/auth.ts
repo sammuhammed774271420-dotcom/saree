@@ -19,7 +19,7 @@ router.post('/admin/login', async (req, res) => {
     console.log('🔐 محاولة تسجيل دخول مدير:', email);
 
     // استخدام خدمة المصادقة المبسطة
-    const result = await simpleAuthService.loginAdmin(identifier, password);
+    const result = await simpleAuthService.loginAdmin(email, password);
     
     if (result.success) {
       res.json(result);

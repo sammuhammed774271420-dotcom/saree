@@ -32,6 +32,20 @@ export default function ImageUpload({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // التحقق من توفر خدمة رفع الصور
+    const response = await fetch('/api/images/upload', {
+      method: 'HEAD'
+    });
+    
+    if (!response.ok) {
+      toast({
+        title: "خدمة رفع الصور غير متوفرة",
+        description: "يرجى إدخال رابط الصورة يدوياً",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({

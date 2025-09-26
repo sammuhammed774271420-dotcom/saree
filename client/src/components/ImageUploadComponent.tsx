@@ -117,6 +117,29 @@ export default function ImageUploadComponent({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // التحقق من توفر خدمة رفع الصور
+    try {
+      const testResponse = await fetch('/api/images/upload', {
+        method: 'HEAD'
+      });
+      
+      if (!testResponse.ok) {
+        toast({
+          title: "خدمة رفع الصور غير متوفرة",
+          description: "يرجى إدخال رابط الصورة يدوياً",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      toast({
+        title: "خدمة رفع الصور غير متوفرة",
+        description: "يرجى إدخال رابط الصورة يدوياً",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
 

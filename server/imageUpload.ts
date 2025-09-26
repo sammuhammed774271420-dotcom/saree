@@ -1,29 +1,17 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import sharp from 'sharp';
 import { randomUUID } from 'crypto';
+import { 
+  uploadImageToSupabase, 
+  deleteImageFromSupabase, 
+  extractFilePathFromUrl,
+  STORAGE_BUCKETS,
+  ensureBucketsExist
+} from './supabase';
 
 const router = express.Router();
 
-// إعداد مجلدات التخزين
-const UPLOAD_DIRS = {
-  restaurants: 'uploads/restaurants',
-  menuItems: 'uploads/menu-items',
-  offers: 'uploads/offers',
-  categories: 'uploads/categories',
-  general: 'uploads/general'
-};
-
-// إنشاء المجلدات إذا لم تكن موجودة
-Object.values(UPLOAD_DIRS).forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
-
-// إعداد multer للتعامل مع رفع الملفات
+// إعداد multer للتعامل مع رفع الملفات في الذاكرة
 const storage = multer.memoryStorage();
 
 const upload = multer({
@@ -33,47 +21,27 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // التحقق من نوع الملف
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('نوع الملف غير مدعوم. يرجى رفع صورة بصيغة JPG, PNG, أو WebP'));
+      cb(new Error('نوع الملف غير مدعوم. يرجى رفع صورة بصيغة JPG, PNG, WebP, أو GIF'));
     }
   }
 });
 
-// دالة تحسين الصورة
-async function optimizeImage(buffer: Buffer, options: {
-  width?: number;
-  height?: number;
-  quality?: number;
-  format?: 'jpeg' | 'png' | 'webp';
-} = {}): Promise<Buffer> {
-  const {
-    width = 800,
-    height = 600,
-    quality = 85,
-    format = 'jpeg'
-  } = options;
-
-  return sharp(buffer)
-    .resize(width, height, {
-      fit: 'cover',
-      position: 'center'
-    })
-    .toFormat(format, { quality })
-    .toBuffer();
-}
-
 // دالة إنشاء اسم ملف فريد
 function generateUniqueFilename(originalName: string, category: string): string {
   const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 15);
-  const extension = path.extname(originalName).toLowerCase();
-  return `${timestamp}-${randomId}${extension}`;
+  const randomId = randomUUID().substring(0, 8);
+  const extension = originalName.split('.').pop()?.toLowerCase() || 'jpg';
+  return `${category}/${timestamp}-${randomId}.${extension}`;
 }
 
-// رفع صورة واحدة
+// التأكد من إنشاء buckets عند بدء الخادم
+ensureBucketsExist().catch(console.error);
+
+// رفع صورة واحدة إلى Supabase
 router.post('/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -83,10 +51,11 @@ router.post('/upload', upload.single('image'), async (req, res) => {
       });
     }
 
-    const { category = 'general', optimize = 'true' } = req.body;
+    const { category = 'general' } = req.body;
     
     // التحقق من صحة الفئة
-    if (!UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS]) {
+    const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS];
+    if (!bucketName) {
       return res.status(400).json({
         success: false,
         message: 'فئة غير صحيحة'
@@ -94,66 +63,34 @@ router.post('/upload', upload.single('image'), async (req, res) => {
     }
 
     // إنشاء اسم ملف فريد
-    const filename = generateUniqueFilename(req.file.originalname, category);
-    const uploadDir = UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS];
-    const filePath = path.join(uploadDir, filename);
+    const fileName = generateUniqueFilename(req.file.originalname, category);
 
-    let imageBuffer = req.file.buffer;
+    // رفع الصورة إلى Supabase
+    const uploadResult = await uploadImageToSupabase(
+      req.file.buffer,
+      fileName,
+      bucketName,
+      req.file.mimetype
+    );
 
-    // تحسين الصورة إذا كان مطلوباً
-    if (optimize === 'true') {
-      const optimizationOptions: any = {};
-      
-      // إعدادات مختلفة حسب الفئة
-      switch (category) {
-        case 'restaurants':
-          optimizationOptions.width = 800;
-          optimizationOptions.height = 400;
-          break;
-        case 'menuItems':
-          optimizationOptions.width = 400;
-          optimizationOptions.height = 300;
-          break;
-        case 'offers':
-          optimizationOptions.width = 600;
-          optimizationOptions.height = 300;
-          break;
-        default:
-          optimizationOptions.width = 500;
-          optimizationOptions.height = 400;
-      }
-
-      imageBuffer = await optimizeImage(imageBuffer, optimizationOptions);
+    if (!uploadResult) {
+      return res.status(500).json({
+        success: false,
+        message: 'فشل في رفع الصورة إلى التخزين السحابي'
+      });
     }
-
-    // حفظ الملف
-    await fs.promises.writeFile(filePath, imageBuffer);
-
-    // إنشاء الرابط العام
-    const publicUrl = `/uploads/${category}/${filename}`;
-
-    // إنشاء نسخة مصغرة للمعاينة
-    const thumbnailBuffer = await optimizeImage(imageBuffer, {
-      width: 150,
-      height: 150,
-      quality: 70
-    });
-    
-    const thumbnailFilename = `thumb_${filename}`;
-    const thumbnailPath = path.join(uploadDir, thumbnailFilename);
-    await fs.promises.writeFile(thumbnailPath, thumbnailBuffer);
-    const thumbnailUrl = `/uploads/${category}/${thumbnailFilename}`;
 
     res.json({
       success: true,
       message: 'تم رفع الصورة بنجاح',
       data: {
-        url: publicUrl,
-        thumbnailUrl,
-        filename,
+        url: uploadResult.url,
+        path: uploadResult.path,
+        filename: fileName,
         originalName: req.file.originalname,
-        size: imageBuffer.length,
-        category
+        size: req.file.size,
+        category,
+        bucketName
       }
     });
 
@@ -166,7 +103,7 @@ router.post('/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// رفع صور متعددة
+// رفع صور متعددة إلى Supabase
 router.post('/upload-multiple', upload.array('images', 10), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
@@ -178,9 +115,10 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
       });
     }
 
-    const { category = 'general', optimize = 'true' } = req.body;
+    const { category = 'general' } = req.body;
     
-    if (!UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS]) {
+    const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS];
+    if (!bucketName) {
       return res.status(400).json({
         success: false,
         message: 'فئة غير صحيحة'
@@ -188,34 +126,36 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
     }
 
     const uploadedFiles = [];
+    const failedFiles = [];
 
     for (const file of files) {
-      const filename = generateUniqueFilename(file.originalname, category);
-      const uploadDir = UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS];
-      const filePath = path.join(uploadDir, filename);
-
-      let imageBuffer = file.buffer;
-
-      if (optimize === 'true') {
-        imageBuffer = await optimizeImage(imageBuffer);
-      }
-
-      await fs.promises.writeFile(filePath, imageBuffer);
-
-      const publicUrl = `/uploads/${category}/${filename}`;
+      const fileName = generateUniqueFilename(file.originalname, category);
       
-      uploadedFiles.push({
-        url: publicUrl,
-        filename,
-        originalName: file.originalname,
-        size: imageBuffer.length
-      });
+      const uploadResult = await uploadImageToSupabase(
+        file.buffer,
+        fileName,
+        bucketName,
+        file.mimetype
+      );
+
+      if (uploadResult) {
+        uploadedFiles.push({
+          url: uploadResult.url,
+          path: uploadResult.path,
+          filename: fileName,
+          originalName: file.originalname,
+          size: file.size
+        });
+      } else {
+        failedFiles.push(file.originalname);
+      }
     }
 
     res.json({
-      success: true,
-      message: `تم رفع ${uploadedFiles.length} صورة بنجاح`,
-      data: uploadedFiles
+      success: uploadedFiles.length > 0,
+      message: `تم رفع ${uploadedFiles.length} من ${files.length} صورة بنجاح`,
+      data: uploadedFiles,
+      failed: failedFiles
     });
 
   } catch (error) {
@@ -227,7 +167,7 @@ router.post('/upload-multiple', upload.array('images', 10), async (req, res) => 
   }
 });
 
-// حذف صورة
+// حذف صورة من Supabase
 router.delete('/delete', async (req, res) => {
   try {
     const { url, category } = req.body;
@@ -239,26 +179,37 @@ router.delete('/delete', async (req, res) => {
       });
     }
 
-    // استخراج اسم الملف من الرابط
-    const filename = path.basename(url);
-    const uploadDir = UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS] || UPLOAD_DIRS.general;
-    const filePath = path.join(uploadDir, filename);
-
-    // حذف الملف الأساسي
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath);
+    const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS];
+    if (!bucketName) {
+      return res.status(400).json({
+        success: false,
+        message: 'فئة غير صحيحة'
+      });
     }
 
-    // حذف النسخة المصغرة إذا كانت موجودة
-    const thumbnailPath = path.join(uploadDir, `thumb_${filename}`);
-    if (fs.existsSync(thumbnailPath)) {
-      await fs.promises.unlink(thumbnailPath);
+    // استخراج مسار الملف من الرابط
+    const filePath = extractFilePathFromUrl(url, bucketName);
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخراج مسار الملف من الرابط'
+      });
     }
 
-    res.json({
-      success: true,
-      message: 'تم حذف الصورة بنجاح'
-    });
+    // حذف الصورة من Supabase
+    const deleteSuccess = await deleteImageFromSupabase(filePath, bucketName);
+
+    if (deleteSuccess) {
+      res.json({
+        success: true,
+        message: 'تم حذف الصورة بنجاح'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'فشل في حذف الصورة'
+      });
+    }
 
   } catch (error) {
     console.error('خطأ في حذف الصورة:', error);
@@ -274,33 +225,38 @@ router.get('/info/:category/:filename', async (req, res) => {
   try {
     const { category, filename } = req.params;
     
-    if (!UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS]) {
+    const bucketName = STORAGE_BUCKETS[category as keyof typeof STORAGE_BUCKETS];
+    if (!bucketName) {
       return res.status(400).json({
         success: false,
         message: 'فئة غير صحيحة'
       });
     }
 
-    const uploadDir = UPLOAD_DIRS[category as keyof typeof UPLOAD_DIRS];
-    const filePath = path.join(uploadDir, filename);
+    // الحصول على معلومات الملف من Supabase
+    const { data, error } = await supabaseClient.storage
+      .from(bucketName)
+      .list(category, {
+        search: filename
+      });
 
-    if (!fs.existsSync(filePath)) {
+    if (error || !data || data.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'الصورة غير موجودة'
       });
     }
 
-    const stats = await fs.promises.stat(filePath);
+    const fileInfo = data[0];
     
     res.json({
       success: true,
       data: {
-        filename,
-        size: stats.size,
-        createdAt: stats.birthtime,
-        modifiedAt: stats.mtime,
-        url: `/uploads/${category}/${filename}`
+        filename: fileInfo.name,
+        size: fileInfo.metadata?.size || 0,
+        createdAt: fileInfo.created_at,
+        modifiedAt: fileInfo.updated_at,
+        url: `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${category}/${filename}`
       }
     });
 

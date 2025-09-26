@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./viteServer";
 import { seedDefaultData } from "./seed";
 import { storage } from "./storage";
+import { ensureBucketsExist } from "./supabase";
 
 const app = express();
 app.use(express.json());
@@ -51,6 +52,10 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    // إعداد Supabase buckets
+    log('🪣 إعداد buckets التخزين في Supabase...');
+    await ensureBucketsExist();
+    
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

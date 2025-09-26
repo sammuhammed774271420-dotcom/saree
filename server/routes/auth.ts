@@ -1,9 +1,6 @@
 import express from 'express';
-import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { dbStorage } from '../db';
-import { adminUsers, drivers } from '@shared/schema';
-import { eq, or } from 'drizzle-orm';
+import { simpleAuthService } from '../auth';
 
 const router = express.Router();
 
@@ -21,61 +18,14 @@ router.post('/admin/login', async (req, res) => {
 
     console.log('🔐 محاولة تسجيل دخول مدير:', email);
 
-    // البحث عن المدير في قاعدة البيانات
-    const adminResult = await dbStorage.db
-      .select()
-      .from(adminUsers)
-      .where(
-        or(
-          eq(adminUsers.email, email),
-          eq(adminUsers.username, email)
-        )
-      )
-      .limit(1);
-
-    if (adminResult.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'بيانات الدخول غير صحيحة'
-      });
-    }
-
-    const admin = adminResult[0];
-
-    // التحقق من حالة الحساب
-    if (!admin.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'الحساب غير مفعل'
-      });
-    }
-
-    // التحقق من كلمة المرور (مقارنة مباشرة بدون تشفير)
-    const isPasswordValid = password === admin.password;
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'بيانات الدخول غير صحيحة'
-      });
-    }
-
-    // إنشاء رمز مميز بسيط
-    const token = randomUUID();
-
-    console.log('🎉 تم تسجيل الدخول بنجاح للمدير:', admin.name);
+    // استخدام خدمة المصادقة المبسطة
+    const result = await simpleAuthService.loginAdmin(identifier, password);
     
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: admin.id,
-        name: admin.name,
-        email: admin.email,
-        userType: 'admin'
-      },
-      message: 'تم تسجيل الدخول بنجاح'
-    });
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(401).json(result);
+    }
 
   } catch (error) {
     console.error('خطأ في تسجيل دخول المدير:', error);
@@ -100,56 +50,14 @@ router.post('/driver/login', async (req, res) => {
 
     console.log('🔐 محاولة تسجيل دخول سائق:', phone);
 
-    // البحث عن السائق في قاعدة البيانات
-    const driverResult = await dbStorage.db
-      .select()
-      .from(drivers)
-      .where(eq(drivers.phone, phone))
-      .limit(1);
-
-    if (driverResult.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'بيانات الدخول غير صحيحة'
-      });
-    }
-
-    const driver = driverResult[0];
-
-    // التحقق من حالة الحساب
-    if (!driver.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'الحساب غير مفعل'
-      });
-    }
-
-    // التحقق من كلمة المرور (مقارنة مباشرة بدون تشفير)
-    const isPasswordValid = password === driver.password;
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'بيانات الدخول غير صحيحة'
-      });
-    }
-
-    // إنشاء رمز مميز بسيط
-    const token = randomUUID();
-
-    console.log('🎉 تم تسجيل الدخول بنجاح للسائق:', driver.name);
+    // استخدام خدمة المصادقة المبسطة
+    const result = await simpleAuthService.loginDriver(phone, password);
     
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: driver.id,
-        name: driver.name,
-        phone: driver.phone,
-        userType: 'driver'
-      },
-      message: 'تم تسجيل الدخول بنجاح'
-    });
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(401).json(result);
+    }
 
   } catch (error) {
     console.error('خطأ في تسجيل دخول السائق:', error);
